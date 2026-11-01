@@ -444,6 +444,8 @@
     padding: 4px;
   }
   .roster-chip {
+    border: 0;
+    font-family: inherit;
     background: var(--accent);
     color: #000;
     padding: 4px 10px;
@@ -784,7 +786,7 @@ function simulateRace(playerOVR, raceType, rng) {
     // Add oval pack-racing chaos (drafting can upset strong cars)
     if (raceType === 'snow') {
         field.forEach(car => {
-            if (!car.isPlayer && car.ovr < 85) {
+            if (!car.isPlayer && car.ovr < 90) {
                 car.score += rng() * 0.22;  // more chaos
             }
         });
@@ -853,6 +855,15 @@ function renderDrivers() {
         if (!drafted) {
             card.onclick = () => draftDriver(d);
         }
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-disabled', String(drafted));
+        card.tabIndex = drafted ? -1 : 0;
+        card.onkeydown = event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                card.click();
+            }
+        };
         grid.appendChild(card);
     });
 }
@@ -889,12 +900,12 @@ function updateDraftUI() {
         countText.textContent = 'Pick 5 WRC legends';
         helpText.textContent = 'Tap a driver to draft. Mix eras for synergy bonuses.';
         status.classList.remove('full');
-    } else if (n < 6) {
+    } else if (n < 5) {
         countText.textContent = `${n}/5 drivers drafted`;
-        helpText.textContent = `Pick ${6 - n} more. Avg OVR: ${$('stat-avg').textContent}`;
+        helpText.textContent = `Pick ${5 - n} more. Avg OVR: ${$('stat-avg').textContent}`;
         status.classList.remove('full');
     } else {
-        countText.textContent = '🏎️ Roster Complete!';
+        countText.textContent = '🏎\uFE0F Roster Complete!';
         helpText.textContent = `Avg OVR: ${$('stat-avg').textContent} (incl +${eraSynergy(state.drafted).toFixed(1)} era synergy)`;
         status.classList.add('full');
     }
@@ -907,7 +918,8 @@ function updateDraftUI() {
         rosterDiv.className = 'roster';
         rosterDiv.style.marginTop = '10px';
         state.drafted.forEach(d => {
-            const chip = document.createElement('span');
+            const chip = document.createElement('button');
+            chip.type = 'button';
             chip.className = 'roster-chip';
             chip.textContent = `${d.name} ${d.ovr}`;
             chip.onclick = () => undraftDriver(d.id);
@@ -946,6 +958,9 @@ $('start-btn').onclick = () => {
     state.season.standings[state.season.primaryDriver.id] = 0;
     state.drafted.forEach(d => state.season.standings[d.id] = 0);
 
+    $('season-wins').textContent = '0';
+    $('season-streak').textContent = '0';
+    $('season-points').textContent = '0';
     switchScreen('season');
     $('race-counter').textContent = '1';
     $('race-counter-end') && ($('race-counter-end').textContent = '1');
@@ -1059,26 +1074,24 @@ function showFinale() {
     switchScreen('finale');
     const wins = state.season.playerWins;
     // Real rounds: 13 rounds total, 8 gravel + 4 tarmac + 1 snow, no rest days. R13 = Power Stage (2x points)
-    // Player can win up to 20 stages (skips rest day). Perfect = "21-0" since the goal is to "complete the Tour undefeated" (rest day doesn't count as a loss)
     const totalStages = SCHEDULE.length;
-    const losses = totalStages - 1 - wins;  // rest day is not a loss
+    const losses = totalStages - wins;
     const record = `${wins}-${losses}`;
 
-    $('finale-record').textContent = `${totalStages}-0`;  // Display as "21-0" perfect = "won every stage"
-    $('share-record').textContent = `${totalStages}-0`;
+    $('finale-record').textContent = record;
+    $('share-record').textContent = record;
 
     // Title
     let title = '';
-    if (wins === 20) title = `🏆 UNDEFEATED — ${totalStages}-0 GRAND CHELEM!`;
-    else if (wins >= 17) title = `🏆 ELITE — ${wins} stage wins`;
-    else if (wins >= 9) title = `🏁 RALLY LEGEND — ${wins}/13 round wins`;
-    else if (wins >= 5) title = `🏁 PODIUM CONTENDER — ${wins}/13 round wins`;
-    else title = `${wins} stage wins — Try a stronger roster next time`;
+    if (wins === totalStages) title = `🏆 UNDEFEATED — ${record} GRAND CHELEM!`;
+    else if (wins >= 9) title = `🏁 RALLY LEGEND — ${wins}/${totalStages} round wins`;
+    else if (wins >= 5) title = `🏁 PODIUM CONTENDER — ${wins}/${totalStages} round wins`;
+    else title = `${wins} round wins — Try a stronger roster next time`;
     $('finale-title').textContent = title;
 
     // Badges
     let badgesHTML = '';
-    if (wins === 20) badgesHTML += '<span class="badge gold">⭐ Grand Chelem — Every Stage</span>';
+    if (wins === totalStages) badgesHTML += '<span class="badge gold">⭐ Grand Chelem — Every Round</span>';
     if (state.season.bestStreak >= 6) badgesHTML += `<span class="badge green">🔥 ${state.season.bestStreak}-Race Streak</span>`;
     if (wins >= 13) badgesHTML += '<span class="badge green">Title Contender</span>';
     if (wins < 6) badgesHTML += '<span class="badge red">Rebuild Year</span>';
@@ -1127,6 +1140,8 @@ $('share-btn').onclick = () => {
         navigator.clipboard.writeText(text).then(() => {
             $('share-btn').textContent = '✅ Copied!';
             setTimeout(() => $('share-btn').textContent = '📋 Copy Share Text', 1500);
+        }).catch(() => {
+            alert(text);
         });
     } else {
         alert(text);
